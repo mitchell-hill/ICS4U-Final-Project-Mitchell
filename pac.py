@@ -47,7 +47,7 @@ class Pac(pygame.sprite.Sprite):
 		for animation in self.animations.keys():
 			full_path = character_path + animation
 			self.animations[animation] = import_sprite(full_path)
-
+			print(f"Loaded {len(self.animations[animation])} frames for {animation} animation.")
 
 	def _is_collide(self, x, y):
 		tmp_rect = self.rect.move(x, y)
