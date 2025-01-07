@@ -49,6 +49,11 @@ class Pac(pygame.sprite.Sprite):
 			self.animations[animation] = import_sprite(full_path)
 			print(f"Loaded {len(self.animations[animation])} frames for {animation} animation.")
 
+		# Handle empty animation gracefully
+		if len(self.animations["idle"]) == 0:
+			print("Error: No idle frames loaded, using default image.")
+			self.animations["idle"].append(pygame.Surface((CHAR_SIZE, CHAR_SIZE)))  # Default blank image
+
 	def _is_collide(self, x, y):
 		tmp_rect = self.rect.move(x, y)
 		if tmp_rect.collidelist(self.walls_collide_list) == -1:
