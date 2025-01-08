@@ -1,34 +1,47 @@
 # animation.py
 import board
 import displayio
-from os import walk
+import os
 from adafruit_display_shapes.rect import Rect
 
-# Function to import sprite images
+# Function to import sprite images from all subdirectories in /assets
 def import_sprite(path):
 	surface_list = []
 
-	# Initialize display context
-	for _, __, img_file in walk(path):
-		for image in img_file:
-			full_path = f"{path}/{image}"
+	try:
+		# List all directories in the given path (i.e., /assets)
+		directories = [d for d in os.listdir(path) if os.path.isdir(f"{path}/{d}")]
+		
+		for directory in directories:
+			# Construct the full path for the subdirectory (e.g., /assets/pac)
+			subdirectory_path = f"{path}/{directory}"
 			
-			# Open the image file from CIRCUITPY (use open() for raw byte data)
-			with open(full_path, "rb") as file:
-				image_data = file.read()
+			# List all files in this subdirectory
+			file_list = os.listdir(subdirectory_path)
+			
+			for image in file_list:
+				# Only process image files
+				if image.endswith('.bmp') or image.endswith('.png'):  # Check for image file extensions
+					full_path = f"{subdirectory_path}/{image}"
+					
+					# Open the image file from CIRCUITPY
+					with open(full_path, "rb") as file:
+						image_data = file.read()
 
-			# Convert image data to displayio Bitmap (you'll likely want to use a format like .bmp, .png, etc.)
-			# You might use an external tool to convert your image to a bitmap
-			bitmap = displayio.OnDiskBitmap(full_path)
-			
-			# Create a TileGrid to display this bitmap
-			sprite = displayio.TileGrid(bitmap, pixel_shader=displayio.ColorConverter())
-			surface_list.append(sprite)
+					# Convert image data to displayio Bitmap
+					bitmap = displayio.OnDiskBitmap(full_path)
+					
+					# Create a TileGrid to display this bitmap
+					sprite = displayio.TileGrid(bitmap, pixel_shader=displayio.ColorConverter())
+					surface_list.append(sprite)
+	
+	except Exception as e:
+		print(f"Error while importing sprites: {e}")
 	
 	return surface_list
 
 # Usage of the import_sprite function
-sprites = import_sprite("/sprites")  # Change this path to where your images are stored
+sprites = import_sprite("/assets")  # Pass the /assets directory
 
 # Example of displaying the first sprite on the screen
 display = board.DISPLAY
