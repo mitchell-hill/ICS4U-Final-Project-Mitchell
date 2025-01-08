@@ -1,21 +1,21 @@
 # berry.py
-import pygame
+import board
+import displayio
+from adafruit_display_shapes.circle import Circle
+from settings import CHAR_SIZE
 
-from settings import CHAR_SIZE, PLAYER_SPEED
-
-class Berry(pygame.sprite.Sprite):
-	def __init__(self, row, col, size, is_power_up = False):
-		super().__init__()
+class Berry:
+	def __init__(self, row, col, size, is_power_up=False):
 		self.power_up = is_power_up
 		self.size = size
-		self.color = pygame.Color("violetred")
+		self.color = 0xD85F8D  # 'violetred' color in hex
 		self.thickness = size
 		self.abs_x = (row * CHAR_SIZE) + (CHAR_SIZE // 2)
 		self.abs_y = (col * CHAR_SIZE) + (CHAR_SIZE // 2)
 
-		# temporary rect for colliderect-checking
-		self.rect = pygame.Rect(self.abs_x,self.abs_y, self.size * 2, self.size * 2)
+		# Create the visual representation of the berry (a circle)
+		self.circle = Circle(self.abs_x, self.abs_y, self.size, fill=self.color)
 
-	def update(self, screen):
-		self.rect = pygame.draw.circle(screen, self.color, (self.abs_x, self.abs_y), self.size, self.thickness)
-		
+	def update(self, display_group):
+		# Remove any previous circle (optional if using a group for sprites)
+		display_group.append(self.circle)  # Add the berry circle to the display group
