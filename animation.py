@@ -2,7 +2,7 @@
 import board
 import displayio
 import os
-from adafruit_display_shapes.rect import Rect
+from adafruit_display_shapes.rect import rect
 
 # Function to import sprite images from all subdirectories in /assets
 def import_sprite(path):

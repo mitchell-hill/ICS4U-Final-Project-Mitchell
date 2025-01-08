@@ -1,7 +1,7 @@
 # berry.py
 import board
 import displayio
-from adafruit_display_shapes.circle import Circle
+from adafruit_display_shapes.circle import circle
 from settings import CHAR_SIZE
 
 class Berry:

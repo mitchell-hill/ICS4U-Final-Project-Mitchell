@@ -1,7 +1,7 @@
 # cell.py
 import board
 import displayio
-from adafruit_display_shapes.rect import Rect
+from adafruit_display_shapes.rect import rect
 
 class Cell:
 	def __init__(self, row, col, length, width):

@@ -2,8 +2,8 @@
 import board
 import displayio
 from adafruit_display_text import label
-from adafruit_display_shapes.rect import Rect
-from adafruit_display_shapes.circle import Circle
+from adafruit_display_shapes.rect import rect
+from adafruit_display_shapes.circle import circle
 from settings import WIDTH, HEIGHT, CHAR_SIZE
 
 class Display:
