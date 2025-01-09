@@ -1,49 +1,40 @@
 # pac.py
-import time
-import board
-import displayio
+import pygame
+
 from settings import CHAR_SIZE, PLAYER_SPEED
 from animation import import_sprite
 
-class Pac:
-	def __init__(self, row, col, display_group):
-		# Set the position on the grid
+class Pac(pygame.sprite.Sprite):
+	def __init__(self, row, col):
+		super().__init__()
+
 		self.abs_x = (row * CHAR_SIZE)
 		self.abs_y = (col * CHAR_SIZE)
-		
-		# Initialize the display group for rendering
-		self.display_group = display_group
-		
-		# Initialize animation frames (using displayio.Bitmap)
+
+		# pac animation
 		self._import_character_assets()
 		self.frame_index = 0
 		self.animation_speed = 0.5
-		self.image = self.animations["idle"][self.frame_index]  # Start with idle animation
-		self.rect = displayio.Rectangle(x=self.abs_x, y=self.abs_y, width=CHAR_SIZE, height=CHAR_SIZE, outline=0x0000FF)
-		
-		# Player stats
+		self.image = self.animations["idle"][self.frame_index]
+		self.rect = self.image.get_rect(topleft = (self.abs_x, self.abs_y))
+		self.mask = pygame.mask.from_surface(self.image)
+
 		self.pac_speed = PLAYER_SPEED
 		self.immune_time = 0
 		self.immune = False
-		self.direction = (0, 0)
 
-		self.directions = {
-			'left': (-PLAYER_SPEED, 0),
-			'right': (PLAYER_SPEED, 0),
-			'up': (0, -PLAYER_SPEED),
-			'down': (0, PLAYER_SPEED)
-		}
-		
-		# Initial status and score
+		self.directions = {'left': (-PLAYER_SPEED, 0), 'right': (PLAYER_SPEED, 0), 'up': (0, -PLAYER_SPEED), 'down': (0, PLAYER_SPEED)}
+		self.keys = {'left': pygame.K_LEFT, 'right': pygame.K_RIGHT, 'up': pygame.K_UP, 'down': pygame.K_DOWN}
+		self.direction = (0, 0)
+	
+		# pac status
 		self.status = "idle"
 		self.life = 3
 		self.pac_score = 0
-		
-		# Add player rectangle to display group
-		self.display_group.append(self.rect)
 
+
+	# gets all the image needed for animating specific player action
 	def _import_character_assets(self):
-		# Import sprites for different directions/animations
 		character_path = "assets/pac/"
 		self.animations = {
 			"up": [],
@@ -56,53 +47,48 @@ class Pac:
 		for animation in self.animations.keys():
 			full_path = character_path + animation
 			self.animations[animation] = import_sprite(full_path)
-			print(f"Loaded {len(self.animations[animation])} frames for {animation} animation.")
 
-		# Handle missing animations
-		if len(self.animations["idle"]) == 0:
-			print("Error: No idle frames loaded, using default image.")
-			self.animations["idle"].append(displayio.Bitmap(CHAR_SIZE, CHAR_SIZE))  # Blank image
 
-	def _is_collide(self, x, y, walls_collide_list):
-		# Check if moving to a new position collides with walls
-		tmp_rect = displayio.Rectangle(x=self.rect.x + x, y=self.rect.y + y, width=CHAR_SIZE, height=CHAR_SIZE, outline=0xFF0000)
-		for wall in walls_collide_list:
-			if tmp_rect.collides(wall):
-				return True
-		return False
+	def _is_collide(self, x, y):
+		tmp_rect = self.rect.move(x, y)
+		if tmp_rect.collidelist(self.walls_collide_list) == -1:
+			return False
+		return True
+
 
 	def move_to_start_pos(self):
-		# Reset position
 		self.rect.x = self.abs_x
 		self.rect.y = self.abs_y
 
-	def animate(self, pressed_keys, walls_collide_list):
+
+	# update with sprite/sheets
+	def animate(self, pressed_key, walls_collide_list):
 		animation = self.animations[self.status]
 
-		# Loop through frames
+		# loop over frame index
 		self.frame_index += self.animation_speed
 		if self.frame_index >= len(animation):
 			self.frame_index = 0
-		self.image = animation[int(self.frame_index)]
+		image = animation[int(self.frame_index)]
+		self.image = pygame.transform.scale(image, (CHAR_SIZE, CHAR_SIZE))
 
-		# Handle movement and direction based on key input
-		for key, key_value in pressed_keys.items():
-			if key_value and not self._is_collide(*self.directions[key], walls_collide_list):
+		self.walls_collide_list = walls_collide_list
+		for key, key_value in self.keys.items():
+			if pressed_key[key_value] and not self._is_collide(*self.directions[key]):
 				self.direction = self.directions[key]
 				self.status = key if not self.immune else "power_up"
 				break
-
-		# Move the character if no collision
-		if not self._is_collide(*self.direction, walls_collide_list):
-			self.rect.x += self.direction[0]
-			self.rect.y += self.direction[1]
+		
+		if not self._is_collide(*self.direction):
+			self.rect.move_ip(self.direction)
 			self.status = self.status if not self.immune else "power_up"
-
-		if self._is_collide(*self.direction, walls_collide_list):
+		if self._is_collide(*self.direction):
 			self.status = "idle" if not self.immune else "power_up"
 
-	def update(self, walls_collide_list):
-		# Update immunity timer and reset rect for proper placement
+
+	def update(self):
+		# Timer based from FPS count
 		self.immune = True if self.immune_time > 0 else False
 		self.immune_time -= 1 if self.immune_time > 0 else 0
-		self.rect = displayio.Rectangle(x=self.rect.x, y=self.rect.y, width=CHAR_SIZE, height=CHAR_SIZE, outline=0x0000FF)
+
+		self.rect = self.image.get_rect(topleft=(self.rect.x, self.rect.y))
