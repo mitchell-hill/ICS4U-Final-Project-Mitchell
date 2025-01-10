@@ -1,21 +1,13 @@
 # berry.py
-import pygame
+import ugame
 
-from settings import CHAR_SIZE, PLAYER_SPEED
+class Berry:
+    def __init__(self, row, col, size, is_power_up=False):
+        self.power_up = is_power_up
+        self.size = size
+        self.abs_x = (row * size) + (size // 2)
+        self.abs_y = (col * size) + (size // 2)
 
-class Berry(pygame.sprite.Sprite):
-	def __init__(self, row, col, size, is_power_up = False):
-		super().__init__()
-		self.power_up = is_power_up
-		self.size = size
-		self.color = pygame.Color("violetred")
-		self.thickness = size
-		self.abs_x = (row * CHAR_SIZE) + (CHAR_SIZE // 2)
-		self.abs_y = (col * CHAR_SIZE) + (CHAR_SIZE // 2)
-
-		# temporary rect for colliderect-checking
-		self.rect = pygame.Rect(self.abs_x,self.abs_y, self.size * 2, self.size * 2)
-
-	def update(self, screen):
-		self.rect = pygame.draw.circle(screen, self.color, (self.abs_x, self.abs_y), self.size, self.thickness)
-		
+    def update(self):
+        color = ugame.Color(255, 255, 0) if self.power_up else ugame.Color(255, 0, 0)
+        ugame.display.draw_circle(self.abs_x, self.abs_y, self.size, color)
