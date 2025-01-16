@@ -1,99 +1,176 @@
-# pac.py
 import ugame
-from settings import CHAR_SIZE, PLAYER_SPEED
-from animation import import_sprite  # If necessary, for actual graphics later
+import time
+import random
+import board
+import displayio
 
-class Pac:
-    def __init__(self, row, col):
-        self.sprite = ugame.Sprite(import_sprite("assets/pac/idle")[0])  # Start with idle sprite
-        self.sprite.x = row * CHAR_SIZE  # Set initial X position
-        self.sprite.y = col * CHAR_SIZE  # Set initial Y position
+# Constants
+SCREEN_WIDTH = 160
+SCREEN_HEIGHT = 120
+PACMAN_RADIUS = 10
+PACMAN_COLOR = 0xFFFF00  # Yellow
+BACKGROUND_COLOR = 0x000000  # Black
+BERRY_COLOR = 0xFF0000  # Red
+POWER_UP_COLOR = 0x00FF00  # Green
+PELLET_COLOR = 0xFFFFFF  # White
+GHOST_COLORS = [0xFF5733, 0xFFC0CB, 0xFF0000, 0x87CEEB]  # Orange, Pink, Red, SkyBlue
+GHOST_SIZE = 10  # Ghost size
 
-        # Animation assets (use the `import_sprite` to load animations)
-        self._import_character_assets()
-        self.frame_index = 0
-        self.animation_speed = 0.5  # Speed of the animation
-        self.image = self.animations["idle"][self.frame_index]  # Current image
+# Initialize the display
+display = board.DISPLAY
 
-        # Movement settings
-        self.pac_speed = PLAYER_SPEED
-        self.immune_time = 0  # For immunity timer
-        self.immune = False  # Pac-Man's immunity status
+# Create a group to hold game objects
+game_group = displayio.Group()
 
-        # Movement directions (up, down, left, right)
-        self.directions = {'left': (-PLAYER_SPEED, 0), 'right': (PLAYER_SPEED, 0), 'up': (0, -PLAYER_SPEED), 'down': (0, PLAYER_SPEED)}
-        self.keys = {'left': 'a', 'right': 'd', 'up': 'w', 'down': 's'}  # Key mappings for movement
-        self.direction = (0, 0)  # Current movement direction
+# Pac-Man variables
+pacman_x = SCREEN_WIDTH // 2
+pacman_y = SCREEN_HEIGHT // 2
 
-        # Pac-Man status and game state
-        self.status = "idle"  # Can be idle, moving, or power_up
-        self.life = 3  # Initial lives
-        self.pac_score = 0  # Starting score
+# Function to create a circle shape for Pac-Man
+def create_pacman(x, y):
+	pacman = displayio.Circle(x=x, y=y, radius=PACMAN_RADIUS, fill=PACMAN_COLOR)
+	return pacman
 
-    def _import_character_assets(self):
-        """Simulate character asset loading (sprites or other animation assets)."""
-        character_path = "assets/pac/"
-        self.animations = {
-            "up": [],    # Animation frames for moving up
-            "down": [],  # Animation frames for moving down
-            "left": [],  # Animation frames for moving left
-            "right": [], # Animation frames for moving right
-            "idle": [],  # Animation frames for idle
-            "power_up": []  # Power-up animation frames
-        }
+# Function to create a berry (red square)
+def create_berry(x, y):
+	berry = displayio.Rect(x=x, y=y, width=8, height=8, fill=BERRY_COLOR)
+	return berry
 
-        # Load animation assets (for now, these are empty lists, but you can load frame data)
-        for animation in self.animations.keys():
-            full_path = character_path + animation
-            self.animations[animation] = import_sprite(full_path)  # If sprite import logic is needed
+# Function to create a power-up (green square)
+def create_power_up(x, y):
+	power_up = displayio.Rect(x=x, y=y, width=8, height=8, fill=POWER_UP_COLOR)
+	return power_up
 
-    def _is_collide(self, x, y, walls_collide_list):
-        """Check if Pac-Man collides with a wall at the next position."""
-        new_x = self.sprite.x + x
-        new_y = self.sprite.y + y
-        # Check for collision with any wall using `colliderect()`
-        for wall in walls_collide_list:
-            if self.sprite.colliderect(wall.sprite):  # Assume `wall` is a sprite
-                return True
-        return False
+# Function to create a pellet (small white circle)
+def create_pellet(x, y):
+	pellet = displayio.Circle(x=x, y=y, radius=3, fill=PELLET_COLOR)
+	return pellet
 
-    def move_to_start_pos(self):
-        """Reset Pac-Man's position to the starting coordinates."""
-        self.sprite.x = self.sprite.x
-        self.sprite.y = self.sprite.y
+# Function to create a ghost (using square for simplicity)
+def create_ghost(x, y, color):
+	ghost = displayio.Rect(x=x, y=y, width=GHOST_SIZE, height=GHOST_SIZE, fill=color)
+	return ghost
 
-    def animate(self, pressed_key, walls_collide_list):
-        """Handle Pac-Man's movement and animation."""
-        animation = self.animations[self.status]  # Get the current status animation
+# Generate random positions for berries, power-ups, and pellets
+def random_position():
+	x = random.randint(10, SCREEN_WIDTH - 10)
+	y = random.randint(10, SCREEN_HEIGHT - 10)
+	return x, y
 
-        # Update the frame for animation
-        self.frame_index += self.animation_speed
-        if self.frame_index >= len(animation):
-            self.frame_index = 0
-        self.image = animation[int(self.frame_index)]  # Update image for the current frame
+# Create game objects
+pacman = create_pacman(pacman_x, pacman_y)
+berries = [create_berry(*random_position()) for _ in range(5)]
+power_up = create_power_up(*random_position())
+pellets = [create_pellet(*random_position()) for _ in range(10)]
 
-        # Handle movement based on user input
-        for key, key_value in self.keys.items():
-            if pressed_key == key_value and not self._is_collide(*self.directions[key], walls_collide_list):
-                self.direction = self.directions[key]
-                self.status = key if not self.immune else "power_up"
-                break  # Move in the direction once a valid key is pressed
+# Create ghosts with random positions and colors
+ghosts = [create_ghost(random.randint(20, SCREEN_WIDTH - 20), random.randint(20, SCREEN_HEIGHT - 20), color) for color in GHOST_COLORS]
 
-        # Update position if no collision occurs
-        if not self._is_collide(*self.direction, walls_collide_list):
-            self.sprite.x += self.direction[0]
-            self.sprite.y += self.direction[1]
-            self.status = self.status if not self.immune else "power_up"
-        
-        # Handle collision (if any)
-        if self._is_collide(*self.direction, walls_collide_list):
-            self.status = "idle" if not self.immune else "power_up"
+# Add all game objects to the display group
+game_group.append(pacman)
+for berry in berries:
+	game_group.append(berry)
+game_group.append(power_up)
+for pellet in pellets:
+	game_group.append(pellet)
+for ghost in ghosts:
+	game_group.append(ghost)
 
-    def update(self):
-        """Update Pac-Man's status, immunity, and other related logic."""
-        # Handle immunity (for power-up effect)
-        self.immune = True if self.immune_time > 0 else False
-        self.immune_time -= 1 if self.immune_time > 0 else 0  # Decrement immunity time
+# Score and power-up status
+score = 0
+has_power_up = False
+power_up_timer = 0
 
-        # For graphical simulation, no need for text-based position updates
-        pass
+# Function to move Pac-Man
+def move_pacman(dx, dy):
+	global pacman_x, pacman_y
+	pacman_x = max(min(pacman_x + dx, SCREEN_WIDTH - PACMAN_RADIUS), PACMAN_RADIUS)
+	pacman_y = max(min(pacman_y + dy, SCREEN_HEIGHT - PACMAN_RADIUS), PACMAN_RADIUS)
+	pacman.x = pacman_x
+	pacman.y = pacman_y
+
+# Function to move ghosts in random directions
+def move_ghosts():
+	for ghost in ghosts:
+		direction = random.choice(["up", "down", "left", "right"])
+		if direction == "up":
+			ghost.y = max(ghost.y - 2, 0)
+		elif direction == "down":
+			ghost.y = min(ghost.y + 2, SCREEN_HEIGHT - GHOST_SIZE)
+		elif direction == "left":
+			ghost.x = max(ghost.x - 2, 0)
+		elif direction == "right":
+			ghost.x = min(ghost.x + 2, SCREEN_WIDTH - GHOST_SIZE)
+
+# Check for collisions with items
+def check_collisions():
+	global score, has_power_up, power_up_timer
+	# Check for collision with berries
+	for berry in berries[:]:
+		if abs(pacman_x - berry.x) < PACMAN_RADIUS + 4 and abs(pacman_y - berry.y) < PACMAN_RADIUS + 4:
+			game_group.remove(berry)  # Remove the berry
+			berries.remove(berry)
+			score += 10
+	# Check for collision with power-up
+	if abs(pacman_x - power_up.x) < PACMAN_RADIUS + 4 and abs(pacman_y - power_up.y) < PACMAN_RADIUS + 4:
+		game_group.remove(power_up)  # Remove the power-up
+		has_power_up = True
+		power_up_timer = 500  # Activate power-up for 500 game loops
+	# Check for collision with pellets
+	for pellet in pellets[:]:
+		if abs(pacman_x - pellet.x) < PACMAN_RADIUS + 3 and abs(pacman_y - pellet.y) < PACMAN_RADIUS + 3:
+			game_group.remove(pellet)  # Remove the pellet
+			pellets.remove(pellet)
+			score += 1
+	# Check for collision with ghosts
+	for ghost in ghosts:
+		if abs(pacman_x - ghost.x) < PACMAN_RADIUS + GHOST_SIZE // 2 and abs(pacman_y - ghost.y) < PACMAN_RADIUS + GHOST_SIZE // 2:
+			if not has_power_up:  # Game over if Pac-Man collides with a ghost
+				print("Game Over! Final Score:", score)
+				ugame.gameover()
+			else:
+				score += 50  # Bonus points for eating a ghost while powered up
+				ghosts.remove(ghost)  # Remove ghost after eating it
+				game_group.remove(ghost)
+
+# Main game loop
+def main():
+	global score, has_power_up, power_up_timer
+	while True:
+		# Handle button input for movement
+		if ugame.buttons.is_pressed(ugame.BUTTON_UP):
+			move_pacman(0, -2)
+		if ugame.buttons.is_pressed(ugame.BUTTON_DOWN):
+			move_pacman(0, 2)
+		if ugame.buttons.is_pressed(ugame.BUTTON_LEFT):
+			move_pacman(-2, 0)
+		if ugame.buttons.is_pressed(ugame.BUTTON_RIGHT):
+			move_pacman(2, 0)
+
+		# Move ghosts
+		move_ghosts()
+
+		# Check for collisions (berries, power-ups, pellets, ghosts)
+		check_collisions()
+
+		# If power-up is active, reduce the timer
+		if has_power_up:
+			power_up_timer -= 1
+			if power_up_timer <= 0:
+				has_power_up = False
+
+		# Redraw the screen (this is necessary to clear old frames)
+		display.fill(BACKGROUND_COLOR)
+		display.show(game_group)
+
+		# Display score
+		# For simplicity, we can show the score on the PyBadge's display
+		# But since displayio does not have text support in `ugame`, we need additional libraries for this
+		# Here we will assume you use an external method for displaying score (e.g., `label` or other text display)
+		print("Score:", score)  # For debugging output
+		
+		# Update display and delay for smooth game loop
+		time.sleep(0.05)
+
+# Start the game
+main()
