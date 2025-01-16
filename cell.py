@@ -1,5 +1,4 @@
 # cell.py
-import ugame
 import stage
 
 class Cell:

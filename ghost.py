@@ -1,8 +1,7 @@
 # ghost.py
 import random
-import ugame
 from settings import WIDTH, HEIGHT, GHOST_SPEED, CHAR_SIZE
-from sprite import Sprite  # Assuming you have a sprite class to manage ghost images
+from sprite import Sprite
 
 class Ghost:
 	def __init__(self, row, col, color, sprite_image):

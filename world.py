@@ -1,7 +1,6 @@
 # world.py
 import time
 import ugame
-import stage
 
 from settings import HEIGHT, WIDTH, NAV_HEIGHT, CHAR_SIZE, MAP, PLAYER_SPEED
 from pac import Pac
