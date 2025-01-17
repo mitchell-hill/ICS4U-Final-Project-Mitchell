@@ -1,5 +1,4 @@
 import time
-import random
 from adafruit_display_shapes.rect import Rect
 import displayio
 import ugame 
