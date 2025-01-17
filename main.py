@@ -1,17 +1,20 @@
 import time
 import random
 from adafruit_display_shapes.rect import Rect
-from adafruit_display_text import label
 import displayio
-import terminalio
+import ugame 
 
-# Settings
+# Constants for the game
 WIDTH = 160  # Screen width
 HEIGHT = 128  # Screen height
 NAV_HEIGHT = 16  # Navigation bar height
 CHAR_SIZE = 8  # Size of character sprites
 PLAYER_SPEED = 2  # Player movement speed
-MAP = [['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1'],
+GHOST_SPEED = PLAYER_SPEED  # Same as player speed for now
+
+# Map layout
+MAP = [
+    ['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1'],
 	['1',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ','1'],
 	['1','B','1','1',' ','1','1','1',' ','1',' ','1','1','1',' ','1','1','B','1'],
 	['1',' ',' ',' ',' ','1',' ',' ',' ','1',' ',' ',' ','1',' ',' ',' ',' ','1'],
@@ -34,16 +37,38 @@ MAP = [['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1',
 	['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1']
 ]
 
-class Cell(Rect):
-    def __init__(self, x, y, width, height):
-        super().__init__(x * CHAR_SIZE, y * CHAR_SIZE, width, height, fill=0x0000FF)
-
+# Berry class definition
 class Berry(Rect):
-    def __init__(self, x, y, size, is_power_up=False):
-        color = 0xFFFF00 if is_power_up else 0xFF0000
-        super().__init__(x * CHAR_SIZE + (CHAR_SIZE - size) // 2, y * CHAR_SIZE + (CHAR_SIZE - size) // 2, size, size, fill=color)
+    def __init__(self, row, col, size=CHAR_SIZE, is_power_up=False):
+        super().__init__(row * CHAR_SIZE, col * CHAR_SIZE, size, size, fill=0xFF00FF)
         self.power_up = is_power_up
+        self.size = size
+        self.value = 50 if is_power_up else 10  # Assign value based on type
 
+# Cell class definition
+class Cell(ugame.sprite.Sprite):
+    def __init__(self, row, col, length, width):
+        super().__init__()
+        self.width = length
+        self.height = width
+        self.id = (row, col)
+        self.abs_x = row * self.width
+        self.abs_y = col * self.height
+
+        self.rect = ugame.Rect(self.abs_x, self.abs_y, self.width, self.height)
+
+        self.occupying_piece = None
+
+    def update(self, screen):
+        ugame.draw.rect(screen, ugame.Color("blue2"), self.rect)
+
+# Load ghost sprites (dummy function, you need to implement it)
+def import_sprite(sprite_path):
+    # This function should load and return sprite data.
+    # Here, it's just a placeholder.
+    return [0xFFFFFF] * 4  # Dummy return value for sprite (replace with real data)
+
+# Ghost class definition
 class Ghost(Rect):
     def __init__(self, x, y, color):
         super().__init__(x * CHAR_SIZE, y * CHAR_SIZE, CHAR_SIZE, CHAR_SIZE, fill=color)
@@ -72,26 +97,7 @@ class Ghost(Rect):
         self.y = self.start_y
         self.update_sprite()
 
-class Display:
-    def __init__(self, screen):
-        self.screen = screen
-
-    def show_life(self, life):
-        # Logic for displaying life
-        pass
-
-    def show_level(self, level):
-        # Logic for displaying level
-        pass
-
-    def show_score(self, score):
-        # Logic for displaying score
-        pass
-
-    def game_over(self):
-        # Logic for displaying game-over screen
-        pass
-    
+# Pac class definition
 class Pac(Rect):
     def __init__(self, x, y):
         super().__init__(x * CHAR_SIZE, y * CHAR_SIZE, CHAR_SIZE, CHAR_SIZE, fill=0xFFFF00)
@@ -105,10 +111,10 @@ class Pac(Rect):
         self.immune = False
 
         # Load Pac-Man sprite animations
-        self.sprite_left = import_sprite("assets/pacman/left")
-        self.sprite_right = import_sprite("assets/pacman/right")
-        self.sprite_up = import_sprite("assets/pacman/up")
-        self.sprite_down = import_sprite("assets/pacman/down")
+        self.sprite_left = import_sprite("assets/pac/left")
+        self.sprite_right = import_sprite("assets/pac/right")
+        self.sprite_up = import_sprite("assets/pac/up")
+        self.sprite_down = import_sprite("assets/pac/down")
         self.sprite_current = self.sprite_right  # Default sprite direction
         self.sprite_index = 0  # Keeps track of which frame to display
         self.sprite_timer = 0  # Timer for sprite animation speed
@@ -169,10 +175,11 @@ class Pac(Rect):
         # Set the sprite to display based on the current index
         self.fill = self.sprite_current[self.sprite_index]  # Update the sprite
 
+# World class to manage game objects and logic
 class World:
     def __init__(self, screen):
         self.screen = screen
-        self.player = Pac(1, 1)
+        self.player = Pac(1, 1)  # Starting position for Pac-Man
         self.ghosts = []
         self.walls = []
         self.berries = []
@@ -182,92 +189,122 @@ class World:
         self.player_score = 0
         self.game_level = 1
         
-		    def _generate_world(self):
-        # Generate walls, berries, ghosts based on the map
+    def generate_new_level(self):
+        # Generate a new level based on the current level or preset configurations
+        # Modify the map or add more complexity to the game here if needed
+        self._generate_world()  # Rebuild the world for the new level
+    
+    def _generate_world(self):
+        # Clear previous game elements
+        self.walls.clear()
+        self.berries.clear()
+        self.ghosts.clear()
+
+        # Generate walls, berries, and ghosts based on the map
         for y_index, row in enumerate(MAP):
             for x_index, cell in enumerate(row):
                 if cell == "1":
-                    self.walls.append(Rect(x_index * CHAR_SIZE, y_index * CHAR_SIZE, CHAR_SIZE, CHAR_SIZE))
-                elif cell in "B":
-                    self.berries.append(Berry(x_index, y_index))
+                    self.walls.append(Rect(x_index * CHAR_SIZE, y_index * CHAR_SIZE, CHAR_SIZE, CHAR_SIZE, fill=0x0000FF))  # Wall color blue
+                elif cell == "B":
+                    self.berries.append(Berry(x_index, y_index))  # Berries
                 elif cell in "spo":
-                    self.ghosts.append(Ghost(x_index, y_index, color=cell))
+                    self.ghosts.append(Ghost(x_index, y_index, color=cell))  # Ghosts - Use 's', 'p', 'o' for color
 
-    def update(self):
-        if not self.game_over:
-            keys = {
-                "left": pygame.key.get_pressed()[pygame.K_LEFT],
-                "right": pygame.key.get_pressed()[pygame.K_RIGHT],
-                "up": pygame.key.get_pressed()[pygame.K_UP],
-                "down": pygame.key.get_pressed()[pygame.K_DOWN]
-            }
-            
-            # Move player
-            self.player.animate(keys, self.walls)
-
-            # Check collisions between player and berries
-            for berry in self.berries:
-                if self.player.rect.colliderect(berry):
-                    self.player.pac_score += berry.value
-                    self.berries.remove(berry)
-
-            # Check collisions with ghosts
-            for ghost in self.ghosts:
-                if self.player.rect.colliderect(ghost):
-                    if not self.player.immune:
-                        self.player.life -= 1
-                        self.reset_pos = True
-                        break
-                    else:
-                        self.player.pac_score += 100
-                        self.ghosts.remove(ghost)
-
-            # Handle game level progression and reset position
-            if len(self.berries) == 0:
-                self.game_level += 1
-                self.player.move_to_start_pos()
-                for ghost in self.ghosts:
-                    ghost.move_to_start_pos()
-                self.generate_new_level()
-
-        if self.game_over:
-            self.display_game_over_screen()
-
-    def display_game_over_screen(self):
-# Code to display "Game Over" screen with restart option
-        font = pygame.font.SysFont("Arial", 24)
-        game_over_text = font.render("Game Over", True, (255, 0, 0))
-        restart_text = font.render("Press R to Restart", True, (255, 255, 255))
-
-        self.screen.fill((0, 0, 0))  # Fill screen with black for Game Over
-        self.screen.blit(game_over_text, (WIDTH // 2 - game_over_text.get_width() // 2, HEIGHT // 2 - 30))
-        self.screen.blit(restart_text, (WIDTH // 2 - restart_text.get_width() // 2, HEIGHT // 2 + 10))
-
-        pygame.display.update()
-
-        # Wait for user to press R to restart
-        while True:
-            pressed_keys = pygame.key.get_pressed()
-            if pressed_keys[pygame.K_r]:
-                self.restart_level()
-                break
-            pygame.time.wait(100)  # Adding small delay to prevent key hold-up
-
-    def restart_level(self):
-        # Reset game state and restart level
-        self.berries.empty()
-        self.game_level = 1
-        self.player.pac_score = 0
-        self.player.life = 3
-        self.reset_pos = False
-        self._generate_world()  # Regenerate the world, walls, berries, etc.
-        self.display.game_over()  # Reset game over display
+    def draw_world(self):
+        # Draw all the elements on the screen
+        for wall in self.walls:
+            self.screen.fill(wall.fill, wall)
+        for berry in self.berries:
+            self.screen.fill(berry.fill, berry)
+        for ghost in self.ghosts:
+            self.screen.fill(ghost.fill, ghost)
+        self.screen.fill(self.player.fill, self.player)  # Draw Pac-Man
 
     def _dashboard(self):
         # Update and show the HUD with score, lives, and level
         self.display.show_score(self.player.pac_score)
         self.display.show_life(self.player.life)
         self.display.show_level(self.game_level)
+
+    def reset_player_position(self):
+        # Reset the player to the starting position
+        self.player.x = 1 * CHAR_SIZE
+        self.player.y = 1 * CHAR_SIZE
+        self.player.direction = (0, 0)  # Stop movement
+        self.player.immune_time = 0  # Reset immunity timer
+
+    def reset_ghosts_position(self):
+        # Reset all ghosts to their starting positions
+        for ghost in self.ghosts:
+            ghost.move_to_start_pos()
+
+    def check_game_over(self):
+        # Check if the game is over (player has no lives left)
+        if self.player.life <= 0:
+            self.game_over = True
+
+    def show_score(self, score):
+        # Display the player's score on the screen
+        font = ugame.font.SysFont("Arial", 16)
+        score_text = font.render(f"Score: {score}", True, (255, 255, 255))
+        self.screen.blit(score_text, (10, 10))  # Position score at the top-left corner
+
+    def show_life(self, life):
+        # Display the player's life on the screen
+        font = ugame.font.SysFont("Arial", 16)
+        life_text = font.render(f"Lives: {life}", True, (255, 255, 255))
+        self.screen.blit(life_text, (WIDTH - 100, 10))  # Position lives near the top-right corner
+
+    def show_level(self, level):
+        # Display the current level on the screen
+        font = ugame.font.SysFont("Arial", 16)
+        level_text = font.render(f"Level: {level}", True, (255, 255, 255))
+        self.screen.blit(level_text, (WIDTH // 2 - level_text.get_width() // 2, 10))  # Position level at the top center
+
+    def update(self):
+        # Update game state and logic
+        if not self.game_over:
+            self.check_collisions()
+            self.check_game_over()
+            self._dashboard()
+        
+        if self.reset_pos:
+            self.reset_player_position()
+            self.reset_ghosts_position()
+            self.reset_pos = False
+
+    def _dashboard(self):
+        # Update and show the HUD with score, lives, and level
+        self.show_score(self.player.pac_score)
+        self.show_life(self.player.life)
+        self.show_level(self.game_level)
+
+    def check_collisions(self):
+        # Check for collisions between player and various game objects
+        for berry in self.berries:
+            if self.player.rect.colliderect(berry.rect):
+                self.player.pac_score += berry.value
+                self.berries.remove(berry)
+
+        for ghost in self.ghosts:
+            if self.player.rect.colliderect(ghost.rect):
+                if not self.player.immune:
+                    self.player.life -= 1
+                    self.reset_pos = True
+                    break
+                else:
+                    self.player.pac_score += 100
+                    self.ghosts.remove(ghost)
+
+    def restart_level(self):
+        # Reset game state and restart level
+        self.berries.clear()  # Clear the berries
+        self.game_level = 1  # Reset the level
+        self.player.pac_score = 0  # Reset the score
+        self.player.life = 3  # Reset the lives
+        self.reset_pos = False  # Reset the reset position flag
+        self._generate_world()  # Regenerate the world, walls, berries, etc.
+        self.game_over = False  # Set the game to continue after restart
 
     def game_loop(self):
         # Main game loop where the actual gameplay occurs
@@ -278,13 +315,56 @@ class World:
                 self.update()
 
             # Update the screen
-            pygame.display.update()
-            pygame.time.Clock().tick(30)  # Limit to 30 frames per second
+            ugame.display.update()
+            ugame.time.Clock().tick(30)  # Limit to 30 frames per second
 
-if __name__ == "__main__":
-    screen = pygame.display.set_mode((WIDTH, HEIGHT + NAV_HEIGHT))  # Window size
-    pygame.display.set_caption("PacMan")  # Set the window title
-    world = World(screen)  # Create the game world
-    world.game_loop()  # Start the main game loop
+    def display_game_over_screen(self):
+        # Code to display "Game Over" screen with restart option
+        font = ugame.font.SysFont("Arial", 24)
+        game_over_text = font.render("Game Over", True, (255, 0, 0))
+        restart_text = font.render("Press R to Restart", True, (255, 255, 255))
 
+        self.screen.fill((0, 0, 0))  # Fill screen with black for Game Over
+        self.screen.blit(game_over_text, (WIDTH // 2 - game_over_text.get_width() // 2, HEIGHT // 2 - 30))
+        self.screen.blit(restart_text, (WIDTH // 2 - restart_text.get_width() // 2, HEIGHT // 2 + 10))
 
+        ugame.display.update()
+
+        # Wait for user to press R to restart
+        while True:
+            pressed_keys = ugame.key.get_pressed()
+            if pressed_keys[ugame.K_r]:
+                self.restart_level()
+                break
+            ugame.time.wait(100)  # Adding small delay to prevent key hold-up
+
+    # Main game loop
+def main():
+    # Setup game world and Pac-Man
+    screen = displayio.Display(ugame.video, auto_refresh=True)
+    player = Pac(1, 1)  # Starting position for Pac-Man
+    game_over = False
+
+    while True:
+        # Handle button input for movement
+        if ugame.buttons.is_pressed(ugame.BUTTON_UP):
+            player.animate({"up": True}, [])  # Player moves up
+        if ugame.buttons.is_pressed(ugame.BUTTON_DOWN):
+            player.animate({"down": True}, [])  # Player moves down
+        if ugame.buttons.is_pressed(ugame.BUTTON_LEFT):
+            player.animate({"left": True}, [])  # Player moves left
+        if ugame.buttons.is_pressed(ugame.BUTTON_RIGHT):
+            player.animate({"right": True}, [])  # Player moves right
+
+        # Update display (using the built-in displayio for ugame)
+        screen.show(player)  # Show Pac-Man (you may need to handle sprite display differently)
+
+        # Display score and other info (you could use a text label for this)
+        # For simplicity, print to console
+        print("Score:", player.pac_score)
+
+        # Update display and delay for smooth game loop
+        time.sleep(0.01)
+
+# Start the game
+main()
