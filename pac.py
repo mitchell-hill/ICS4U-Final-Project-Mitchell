@@ -3,6 +3,8 @@ import time
 import random
 import board
 import displayio
+import terminalio
+from adafruit_display_text import label  # For displaying text on the screen
 
 # Constants
 SCREEN_WIDTH = 160
@@ -15,6 +17,7 @@ POWER_UP_COLOR = 0x00FF00  # Green
 PELLET_COLOR = 0xFFFFFF  # White
 GHOST_COLORS = [0xFF5733, 0xFFC0CB, 0xFF0000, 0x87CEEB]  # Orange, Pink, Red, SkyBlue
 GHOST_SIZE = 10  # Ghost size
+GHOST_SPEED = 1  # Speed at which ghosts move
 
 # Initialize the display
 display = board.DISPLAY
@@ -76,6 +79,8 @@ for pellet in pellets:
 for ghost in ghosts:
 	game_group.append(ghost)
 
+display.show(game_group)
+
 # Score and power-up status
 score = 0
 has_power_up = False
@@ -89,18 +94,36 @@ def move_pacman(dx, dy):
 	pacman.x = pacman_x
 	pacman.y = pacman_y
 
-# Function to move ghosts in random directions
+# Function to move ghosts towards Pac-Man (AI)
 def move_ghosts():
 	for ghost in ghosts:
-		direction = random.choice(["up", "down", "left", "right"])
-		if direction == "up":
-			ghost.y = max(ghost.y - 2, 0)
-		elif direction == "down":
-			ghost.y = min(ghost.y + 2, SCREEN_HEIGHT - GHOST_SIZE)
-		elif direction == "left":
-			ghost.x = max(ghost.x - 2, 0)
-		elif direction == "right":
-			ghost.x = min(ghost.x + 2, SCREEN_WIDTH - GHOST_SIZE)
+		# Calculate direction to move towards Pac-Man
+		dx = pacman_x - ghost.x
+		dy = pacman_y - ghost.y
+
+		# Normalize the direction
+		distance = max(abs(dx), abs(dy))  # Avoid division by zero
+		if distance != 0:
+			dx /= distance
+			dy /= distance
+
+		# Move the ghost
+		ghost.x += int(dx * GHOST_SPEED)
+		ghost.y += int(dy * GHOST_SPEED)
+
+# Function to create a Game Over screen
+def game_over_screen():
+	# Create the "GAME OVER" text
+	game_over_text = label.Label(terminalio.FONT, text="GAME OVER", color=0xFF0000, x=40, y=40)
+	score_text = label.Label(terminalio.FONT, text="Score: " + str(score), color=0xFFFFFF, x=40, y=60)
+
+	game_group.append(game_over_text)
+	game_group.append(score_text)
+
+	# Update the screen
+	display.show(game_group)
+	time.sleep(2)  # Show the game over screen for a couple of seconds
+	ugame.gameover()
 
 # Check for collisions with items
 def check_collisions():
@@ -126,8 +149,7 @@ def check_collisions():
 	for ghost in ghosts:
 		if abs(pacman_x - ghost.x) < PACMAN_RADIUS + GHOST_SIZE // 2 and abs(pacman_y - ghost.y) < PACMAN_RADIUS + GHOST_SIZE // 2:
 			if not has_power_up:  # Game over if Pac-Man collides with a ghost
-				print("Game Over! Final Score:", score)
-				ugame.gameover()
+				game_over_screen()
 			else:
 				score += 50  # Bonus points for eating a ghost while powered up
 				ghosts.remove(ghost)  # Remove ghost after eating it
@@ -135,8 +157,10 @@ def check_collisions():
 
 # Main game loop
 def main():
+	print("Game Started")
 	global score, has_power_up, power_up_timer
 	while True:
+		print("In main loop")
 		# Handle button input for movement
 		if ugame.buttons.is_pressed(ugame.BUTTON_UP):
 			move_pacman(0, -2)
@@ -147,7 +171,7 @@ def main():
 		if ugame.buttons.is_pressed(ugame.BUTTON_RIGHT):
 			move_pacman(2, 0)
 
-		# Move ghosts
+		# Move ghosts towards Pac-Man
 		move_ghosts()
 
 		# Check for collisions (berries, power-ups, pellets, ghosts)
@@ -163,14 +187,11 @@ def main():
 		display.fill(BACKGROUND_COLOR)
 		display.show(game_group)
 
-		# Display score
-		# For simplicity, we can show the score on the PyBadge's display
-		# But since displayio does not have text support in `ugame`, we need additional libraries for this
-		# Here we will assume you use an external method for displaying score (e.g., `label` or other text display)
-		print("Score:", score)  # For debugging output
-		
+		# Display score (For simplicity, printed to console)
+		print("Score:", score)
+
 		# Update display and delay for smooth game loop
-		time.sleep(0.05)
+		time.sleep(0.01)
 
 # Start the game
 main()
