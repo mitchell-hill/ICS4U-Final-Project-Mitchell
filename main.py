@@ -1,197 +1,290 @@
-import ugame
 import time
 import random
-import board
+from adafruit_display_shapes.rect import Rect
+from adafruit_display_text import label
 import displayio
 import terminalio
-from adafruit_display_text import label  # For displaying text on the screen
 
-# Constants
-SCREEN_WIDTH = 160
-SCREEN_HEIGHT = 120
-PACMAN_RADIUS = 10
-PACMAN_COLOR = 0xFFFF00  # Yellow
-BACKGROUND_COLOR = 0x000000  # Black
-BERRY_COLOR = 0xFF0000  # Red
-POWER_UP_COLOR = 0x00FF00  # Green
-PELLET_COLOR = 0xFFFFFF  # White
-GHOST_COLORS = [0xFF5733, 0xFFC0CB, 0xFF0000, 0x87CEEB]  # Orange, Pink, Red, SkyBlue
-GHOST_SIZE = 10  # Ghost size
-GHOST_SPEED = 1  # Speed at which ghosts move
+# Settings
+WIDTH = 160  # Screen width
+HEIGHT = 128  # Screen height
+NAV_HEIGHT = 16  # Navigation bar height
+CHAR_SIZE = 8  # Size of character sprites
+PLAYER_SPEED = 2  # Player movement speed
+MAP = [['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1'],
+	['1',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ','1'],
+	['1','B','1','1',' ','1','1','1',' ','1',' ','1','1','1',' ','1','1','B','1'],
+	['1',' ',' ',' ',' ','1',' ',' ',' ','1',' ',' ',' ','1',' ',' ',' ',' ','1'],
+	['1','1',' ','1',' ','1',' ','1',' ','1',' ','1',' ','1',' ','1',' ','1','1'],
+	['1',' ',' ','1',' ',' ',' ','1',' ',' ',' ','1',' ',' ',' ','1',' ',' ','1'],
+	['1',' ','1','1','1','1',' ','1','1','1','1','1',' ','1','1','1','1',' ','1'],
+	['1',' ',' ',' ',' ',' ',' ',' ',' ','r',' ',' ',' ',' ',' ',' ',' ',' ','1'],
+	['1','1',' ','1','1','1',' ','1','1','-','1','1',' ','1','1','1',' ','1','1'],
+	[' ',' ',' ',' ',' ','1',' ','1','s','p','o','1',' ','1',' ',' ',' ',' ',' '],
+	['1','1',' ','1',' ','1',' ','1','1','1','1','1',' ','1',' ','1',' ','1','1'],
+	['1',' ',' ','1',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ','1',' ',' ','1'],
+	['1',' ','1','1','1','1',' ','1','1','1','1','1',' ','1','1','1','1',' ','1'],
+	['1',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ','1'],
+	['1','1','1',' ','1','1','1',' ','1','1','1',' ','1','1','1',' ','1','1','1'],
+	['1',' ',' ',' ','1',' ',' ',' ',' ','P',' ',' ',' ',' ','1',' ',' ',' ','1'],
+	['1','B','1',' ','1',' ','1',' ','1','1','1',' ','1',' ','1',' ','1','B','1'],
+	['1',' ','1',' ',' ',' ','1',' ',' ',' ',' ',' ','1',' ',' ',' ','1',' ','1'],
+	['1',' ','1','1','1',' ','1','1','1',' ','1','1','1',' ','1','1','1',' ','1'],
+	['1',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ','1'],
+	['1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1','1']
+]
 
-# Initialize the display
-display = board.DISPLAY
+class Cell(Rect):
+    def __init__(self, x, y, width, height):
+        super().__init__(x * CHAR_SIZE, y * CHAR_SIZE, width, height, fill=0x0000FF)
 
-# Create a group to hold game objects
-game_group = displayio.Group()
+class Berry(Rect):
+    def __init__(self, x, y, size, is_power_up=False):
+        color = 0xFFFF00 if is_power_up else 0xFF0000
+        super().__init__(x * CHAR_SIZE + (CHAR_SIZE - size) // 2, y * CHAR_SIZE + (CHAR_SIZE - size) // 2, size, size, fill=color)
+        self.power_up = is_power_up
 
-# Pac-Man variables
-pacman_x = SCREEN_WIDTH // 2
-pacman_y = SCREEN_HEIGHT // 2
+class Ghost(Rect):
+    def __init__(self, x, y, color):
+        super().__init__(x * CHAR_SIZE, y * CHAR_SIZE, CHAR_SIZE, CHAR_SIZE, fill=color)
+        self.move_speed = PLAYER_SPEED
+        self.start_x = x * CHAR_SIZE
+        self.start_y = y * CHAR_SIZE
+        self.color = color  # Default color for the ghost
 
-# Function to create a circle shape for Pac-Man
-def create_pacman(x, y):
-	pacman = displayio.Circle(x=x, y=y, radius=PACMAN_RADIUS, fill=PACMAN_COLOR)
-	return pacman
+        # Load ghost sprite animations (normal and frightened)
+        self.sprite_normal = import_sprite(f"assets/ghosts/{self.color}/normal")
+        self.sprite_frightened = import_sprite(f"assets/ghosts/{self.color}/frightened")
+        self.sprite_current = self.sprite_normal
+        self.sprite_index = 0
+        self.sprite_timer = 0
 
-# Function to create a berry (red square)
-def create_berry(x, y):
-	berry = displayio.Rect(x=x, y=y, width=8, height=8, fill=BERRY_COLOR)
-	return berry
+    def update_sprite(self):
+        self.sprite_timer += 1
+        if self.sprite_timer > 5:  # Adjust speed of animation
+            self.sprite_timer = 0
+            self.sprite_index = (self.sprite_index + 1) % len(self.sprite_current)
 
-# Function to create a power-up (green square)
-def create_power_up(x, y):
-	power_up = displayio.Rect(x=x, y=y, width=8, height=8, fill=POWER_UP_COLOR)
-	return power_up
+        self.fill = self.sprite_current[self.sprite_index]  # Update the sprite
 
-# Function to create a pellet (small white circle)
-def create_pellet(x, y):
-	pellet = displayio.Circle(x=x, y=y, radius=3, fill=PELLET_COLOR)
-	return pellet
+    def move_to_start_pos(self):
+        self.x = self.start_x
+        self.y = self.start_y
+        self.update_sprite()
 
-# Function to create a ghost (using square for simplicity)
-def create_ghost(x, y, color):
-	ghost = displayio.Rect(x=x, y=y, width=GHOST_SIZE, height=GHOST_SIZE, fill=color)
-	return ghost
+class Display:
+    def __init__(self, screen):
+        self.screen = screen
 
-# Generate random positions for berries, power-ups, and pellets
-def random_position():
-	x = random.randint(10, SCREEN_WIDTH - 10)
-	y = random.randint(10, SCREEN_HEIGHT - 10)
-	return x, y
+    def show_life(self, life):
+        # Logic for displaying life
+        pass
 
-# Create game objects
-pacman = create_pacman(pacman_x, pacman_y)
-berries = [create_berry(*random_position()) for _ in range(5)]
-power_up = create_power_up(*random_position())
-pellets = [create_pellet(*random_position()) for _ in range(10)]
+    def show_level(self, level):
+        # Logic for displaying level
+        pass
 
-# Create ghosts with random positions and colors
-ghosts = [create_ghost(random.randint(20, SCREEN_WIDTH - 20), random.randint(20, SCREEN_HEIGHT - 20), color) for color in GHOST_COLORS]
+    def show_score(self, score):
+        # Logic for displaying score
+        pass
 
-# Add all game objects to the display group
-game_group.append(pacman)
-for berry in berries:
-	game_group.append(berry)
-game_group.append(power_up)
-for pellet in pellets:
-	game_group.append(pellet)
-for ghost in ghosts:
-	game_group.append(ghost)
+    def game_over(self):
+        # Logic for displaying game-over screen
+        pass
+    
+class Pac(Rect):
+    def __init__(self, x, y):
+        super().__init__(x * CHAR_SIZE, y * CHAR_SIZE, CHAR_SIZE, CHAR_SIZE, fill=0xFFFF00)
+        self.abs_x = x * CHAR_SIZE
+        self.abs_y = y * CHAR_SIZE
+        self.pac_speed = PLAYER_SPEED
+        self.direction = (0, 0)
+        self.life = 3
+        self.pac_score = 0
+        self.immune_time = 0
+        self.immune = False
 
-display.show(game_group)
+        # Load Pac-Man sprite animations
+        self.sprite_left = import_sprite("assets/pacman/left")
+        self.sprite_right = import_sprite("assets/pacman/right")
+        self.sprite_up = import_sprite("assets/pacman/up")
+        self.sprite_down = import_sprite("assets/pacman/down")
+        self.sprite_current = self.sprite_right  # Default sprite direction
+        self.sprite_index = 0  # Keeps track of which frame to display
+        self.sprite_timer = 0  # Timer for sprite animation speed
 
-# Score and power-up status
-score = 0
-has_power_up = False
-power_up_timer = 0
+    def animate(self, keys, walls_collide_list):
+        # Determine movement direction based on keys
+        directions = {
+            "left": (-PLAYER_SPEED, 0),
+            "right": (PLAYER_SPEED, 0),
+            "up": (0, -PLAYER_SPEED),
+            "down": (0, PLAYER_SPEED)
+        }
 
-# Function to move Pac-Man
-def move_pacman(dx, dy):
-	global pacman_x, pacman_y
-	pacman_x = max(min(pacman_x + dx, SCREEN_WIDTH - PACMAN_RADIUS), PACMAN_RADIUS)
-	pacman_y = max(min(pacman_y + dy, SCREEN_HEIGHT - PACMAN_RADIUS), PACMAN_RADIUS)
-	pacman.x = pacman_x
-	pacman.y = pacman_y
+        pressed = False
+        for key, direction in directions.items():
+            if keys.get(key, False):
+                next_rect = Rect(
+                    self.x + direction[0], self.y + direction[1],
+                    self.width, self.height
+                )
+                if not any(next_rect.colliderect(wall) for wall in walls_collide_list):
+                    self.direction = direction
+                    pressed = True
+                    break
 
-# Function to move ghosts towards Pac-Man (AI)
-def move_ghosts():
-	for ghost in ghosts:
-		# Calculate direction to move towards Pac-Man
-		dx = pacman_x - ghost.x
-		dy = pacman_y - ghost.y
+        if pressed:
+            self.x += self.direction[0]
+            self.y += self.direction[1]
+        
+        # Update sprite animation based on movement direction
+        self.update_sprite()
 
-		# Normalize the direction
-		distance = max(abs(dx), abs(dy))  # Avoid division by zero
-		if distance != 0:
-			dx /= distance
-			dy /= distance
+        # Handle immunity and power-up
+        self.immune = self.immune_time > 0
+        if self.immune:
+            self.immune_time -= 1
 
-		# Move the ghost
-		ghost.x += int(dx * GHOST_SPEED)
-		ghost.y += int(dy * GHOST_SPEED)
+    def update_sprite(self):
+        # Animate the sprite by cycling through frames
+        self.sprite_timer += 1
+        if self.sprite_timer > 5:  # Adjust speed of animation
+            self.sprite_timer = 0
+            self.sprite_index = (self.sprite_index + 1) % len(self.sprite_current)
+        
+        # Choose the correct sprite based on the direction
+        if self.direction == (0, 0):
+            return  # No movement, don't change sprite
+        
+        if self.direction == (-PLAYER_SPEED, 0):  # Left
+            self.sprite_current = self.sprite_left
+        elif self.direction == (PLAYER_SPEED, 0):  # Right
+            self.sprite_current = self.sprite_right
+        elif self.direction == (0, -PLAYER_SPEED):  # Up
+            self.sprite_current = self.sprite_up
+        elif self.direction == (0, PLAYER_SPEED):  # Down
+            self.sprite_current = self.sprite_down
 
-# Function to create a Game Over screen
-def game_over_screen():
-	# Create the "GAME OVER" text
-	game_over_text = label.Label(terminalio.FONT, text="GAME OVER", color=0xFF0000, x=40, y=40)
-	score_text = label.Label(terminalio.FONT, text="Score: " + str(score), color=0xFFFFFF, x=40, y=60)
+        # Set the sprite to display based on the current index
+        self.fill = self.sprite_current[self.sprite_index]  # Update the sprite
 
-	game_group.append(game_over_text)
-	game_group.append(score_text)
+class World:
+    def __init__(self, screen):
+        self.screen = screen
+        self.player = Pac(1, 1)
+        self.ghosts = []
+        self.walls = []
+        self.berries = []
+        self._generate_world()
+        self.game_over = False
+        self.reset_pos = False
+        self.player_score = 0
+        self.game_level = 1
+        
+		    def _generate_world(self):
+        # Generate walls, berries, ghosts based on the map
+        for y_index, row in enumerate(MAP):
+            for x_index, cell in enumerate(row):
+                if cell == "1":
+                    self.walls.append(Rect(x_index * CHAR_SIZE, y_index * CHAR_SIZE, CHAR_SIZE, CHAR_SIZE))
+                elif cell in "B":
+                    self.berries.append(Berry(x_index, y_index))
+                elif cell in "spo":
+                    self.ghosts.append(Ghost(x_index, y_index, color=cell))
 
-	# Update the screen
-	display.show(game_group)
-	time.sleep(2)  # Show the game over screen for a couple of seconds
-	ugame.gameover()
+    def update(self):
+        if not self.game_over:
+            keys = {
+                "left": pygame.key.get_pressed()[pygame.K_LEFT],
+                "right": pygame.key.get_pressed()[pygame.K_RIGHT],
+                "up": pygame.key.get_pressed()[pygame.K_UP],
+                "down": pygame.key.get_pressed()[pygame.K_DOWN]
+            }
+            
+            # Move player
+            self.player.animate(keys, self.walls)
 
-# Check for collisions with items
-def check_collisions():
-	global score, has_power_up, power_up_timer
-	# Check for collision with berries
-	for berry in berries[:]:
-		if abs(pacman_x - berry.x) < PACMAN_RADIUS + 4 and abs(pacman_y - berry.y) < PACMAN_RADIUS + 4:
-			game_group.remove(berry)  # Remove the berry
-			berries.remove(berry)
-			score += 10
-	# Check for collision with power-up
-	if abs(pacman_x - power_up.x) < PACMAN_RADIUS + 4 and abs(pacman_y - power_up.y) < PACMAN_RADIUS + 4:
-		game_group.remove(power_up)  # Remove the power-up
-		has_power_up = True
-		power_up_timer = 500  # Activate power-up for 500 game loops
-	# Check for collision with pellets
-	for pellet in pellets[:]:
-		if abs(pacman_x - pellet.x) < PACMAN_RADIUS + 3 and abs(pacman_y - pellet.y) < PACMAN_RADIUS + 3:
-			game_group.remove(pellet)  # Remove the pellet
-			pellets.remove(pellet)
-			score += 1
-	# Check for collision with ghosts
-	for ghost in ghosts:
-		if abs(pacman_x - ghost.x) < PACMAN_RADIUS + GHOST_SIZE // 2 and abs(pacman_y - ghost.y) < PACMAN_RADIUS + GHOST_SIZE // 2:
-			if not has_power_up:  # Game over if Pac-Man collides with a ghost
-				game_over_screen()
-			else:
-				score += 50  # Bonus points for eating a ghost while powered up
-				ghosts.remove(ghost)  # Remove ghost after eating it
-				game_group.remove(ghost)
+            # Check collisions between player and berries
+            for berry in self.berries:
+                if self.player.rect.colliderect(berry):
+                    self.player.pac_score += berry.value
+                    self.berries.remove(berry)
 
-# Main game loop
-def main():
-	print("Game Started")
-	global score, has_power_up, power_up_timer
-	while True:
-		print("In main loop")
-		# Handle button input for movement
-		if ugame.buttons.is_pressed(ugame.BUTTON_UP):
-			move_pacman(0, -2)
-		if ugame.buttons.is_pressed(ugame.BUTTON_DOWN):
-			move_pacman(0, 2)
-		if ugame.buttons.is_pressed(ugame.BUTTON_LEFT):
-			move_pacman(-2, 0)
-		if ugame.buttons.is_pressed(ugame.BUTTON_RIGHT):
-			move_pacman(2, 0)
+            # Check collisions with ghosts
+            for ghost in self.ghosts:
+                if self.player.rect.colliderect(ghost):
+                    if not self.player.immune:
+                        self.player.life -= 1
+                        self.reset_pos = True
+                        break
+                    else:
+                        self.player.pac_score += 100
+                        self.ghosts.remove(ghost)
 
-		# Move ghosts towards Pac-Man
-		move_ghosts()
+            # Handle game level progression and reset position
+            if len(self.berries) == 0:
+                self.game_level += 1
+                self.player.move_to_start_pos()
+                for ghost in self.ghosts:
+                    ghost.move_to_start_pos()
+                self.generate_new_level()
 
-		# Check for collisions (berries, power-ups, pellets, ghosts)
-		check_collisions()
+        if self.game_over:
+            self.display_game_over_screen()
 
-		# If power-up is active, reduce the timer
-		if has_power_up:
-			power_up_timer -= 1
-			if power_up_timer <= 0:
-				has_power_up = False
+    def display_game_over_screen(self):
+# Code to display "Game Over" screen with restart option
+        font = pygame.font.SysFont("Arial", 24)
+        game_over_text = font.render("Game Over", True, (255, 0, 0))
+        restart_text = font.render("Press R to Restart", True, (255, 255, 255))
 
-		# Redraw the screen (this is necessary to clear old frames)
-		display.fill(BACKGROUND_COLOR)
-		display.show(game_group)
+        self.screen.fill((0, 0, 0))  # Fill screen with black for Game Over
+        self.screen.blit(game_over_text, (WIDTH // 2 - game_over_text.get_width() // 2, HEIGHT // 2 - 30))
+        self.screen.blit(restart_text, (WIDTH // 2 - restart_text.get_width() // 2, HEIGHT // 2 + 10))
 
-		# Display score (For simplicity, printed to console)
-		print("Score:", score)
+        pygame.display.update()
 
-		# Update display and delay for smooth game loop
-		time.sleep(0.01)
+        # Wait for user to press R to restart
+        while True:
+            pressed_keys = pygame.key.get_pressed()
+            if pressed_keys[pygame.K_r]:
+                self.restart_level()
+                break
+            pygame.time.wait(100)  # Adding small delay to prevent key hold-up
 
-# Start the game
-main()
+    def restart_level(self):
+        # Reset game state and restart level
+        self.berries.empty()
+        self.game_level = 1
+        self.player.pac_score = 0
+        self.player.life = 3
+        self.reset_pos = False
+        self._generate_world()  # Regenerate the world, walls, berries, etc.
+        self.display.game_over()  # Reset game over display
+
+    def _dashboard(self):
+        # Update and show the HUD with score, lives, and level
+        self.display.show_score(self.player.pac_score)
+        self.display.show_life(self.player.life)
+        self.display.show_level(self.game_level)
+
+    def game_loop(self):
+        # Main game loop where the actual gameplay occurs
+        while True:
+            if self.game_over:
+                self.display_game_over_screen()
+            else:
+                self.update()
+
+            # Update the screen
+            pygame.display.update()
+            pygame.time.Clock().tick(30)  # Limit to 30 frames per second
+
+if __name__ == "__main__":
+    screen = pygame.display.set_mode((WIDTH, HEIGHT + NAV_HEIGHT))  # Window size
+    pygame.display.set_caption("PacMan")  # Set the window title
+    world = World(screen)  # Create the game world
+    world.game_loop()  # Start the main game loop
+
+
