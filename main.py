@@ -1,6 +1,5 @@
 import time
 from adafruit_display_shapes.rect import Rect
-import displayio
 import ugame 
 
 # Constants for the game
@@ -340,12 +339,12 @@ class World:
     # Main game loop
 def main():
     # Setup game world and Pac-Man
-    screen = displayio.Display(ugame.video, auto_refresh=True)
+    screen = ugame.display
     player = Pac(1, 1)  # Starting position for Pac-Man
     game_over = False
 
     while True:
-        # Handle button input for movement
+    # Handle button input for movement
         if ugame.buttons.is_pressed(ugame.BUTTON_UP):
             player.animate({"up": True}, [])  # Player moves up
         if ugame.buttons.is_pressed(ugame.BUTTON_DOWN):
