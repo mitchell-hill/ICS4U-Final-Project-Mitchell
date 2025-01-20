@@ -1,6 +1,6 @@
 import time
 from adafruit_display_shapes.rect import Rect
-import ugame 
+import ugame  # type: ignore
 
 # Constants for the game
 WIDTH = 160  # Screen width
